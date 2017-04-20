@@ -1,6 +1,8 @@
 #ifndef TREE_H
 #define TREE_H
 
+#include <stdint.h>
+
 #define BRANCH_FACTOR 16
 #define DEPTH 3
 
@@ -9,6 +11,6 @@ struct tree {
 };
 
 void tree_init(struct tree *);
-void tree_rand_create(struct tree *);
+void tree_create(struct tree *, int *);
 
 #endif

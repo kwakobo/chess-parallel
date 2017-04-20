@@ -5,10 +5,9 @@
 #include <stdio.h>
 int main(int argc, char **argv)
 {
-	for(int i = 0; i < 4096; i++)
-	{
-		printf("%d ", data[i]);
-	}
+	struct tree minimax;
+	tree_init(&minimax);
+	tree_create(&minimax, &data);
 
 	return 0;
 }
