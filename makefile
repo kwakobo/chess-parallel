@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -g
 
-OBJECTS=tree_node.o tree.o main.o
+OBJECTS=tree_node.o tree.o main.o mscp.o
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c $< -o $@
