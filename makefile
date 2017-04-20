@@ -3,7 +3,7 @@ CFLAGS=-Wall -g
 
 OBJECTS=tree_node.o tree.o main.o mscp.o
 
-%.o : %.c
+%.o : %.c %.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 main: $(OBJECTS)

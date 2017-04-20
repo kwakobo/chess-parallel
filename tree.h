@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define BRANCH_FACTOR 16
-#define DEPTH 3
+#define DEPTH 6
 
 struct tree {
 	struct tree_node *root;
