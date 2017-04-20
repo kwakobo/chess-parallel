@@ -41,7 +41,7 @@ tree_create_helper(struct tree_node *root, int *data, uint8_t level, uint8_t *as
 	else if(level == DEPTH)
 	{
 		struct tree_node *leaf_node = malloc(sizeof(struct tree_node));
-		node_init(leaf_node, BRANCH_FACTOR);
+		node_init(leaf_node, 0);
 
 		leaf_node->weight = data[*assigned];
 		(*assigned)++;
