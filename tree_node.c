@@ -1,7 +1,7 @@
 #include "tree_node.h"
 
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 void
 node_init(struct tree_node *node, uint8_t branch)

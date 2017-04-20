@@ -2,7 +2,8 @@
 #include "tree_node.h"
 
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 struct tree_node * tree_create_helper(struct tree_node *root, int *data, uint8_t level, uint8_t *assigned);
 
@@ -59,5 +60,20 @@ tree_create_helper(struct tree_node *root, int *data, uint8_t level, uint8_t *as
 		}
 
 		return child_node;
+	}
+}
+
+void
+tree_print(struct tree *tree)
+{
+	struct tree_node *curr_node = tree->root;
+	int i;
+	for(i = 0; i < DEPTH - 1; i++)
+	{
+		curr_node = curr_node->children[0];
+	}
+	for(i = 0; i < BRANCH_FACTOR; i++)
+	{
+		printf("%d ", curr_node->children[i]->weight);
 	}
 }

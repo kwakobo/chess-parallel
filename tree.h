@@ -12,5 +12,6 @@ struct tree {
 
 void tree_init(struct tree *);
 void tree_create(struct tree *, int *);
+void tree_print(struct tree *tree);
 
 #endif

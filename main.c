@@ -9,5 +9,7 @@ int main(int argc, char **argv)
 	tree_init(&minimax);
 	tree_create(&minimax, &data);
 
+	tree_print(&minimax);
+
 	return 0;
 }
