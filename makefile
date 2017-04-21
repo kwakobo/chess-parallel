@@ -1,13 +1,14 @@
 CC=gcc
 CFLAGS=-Wall -g
+LIB=-lpthread -lrt
 
-OBJECTS=tree_node.o tree.o main.o mscp.o
+OBJECTS=main.o tree_node.o tree.o
 
 %.o : %.c %.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 main: $(OBJECTS)
-	$(CC) $(CFLAGS) -o main $(OBJECTS)
+	$(CC) $(CFLAGS) $(LIB) -o main $(OBJECTS)
 
 
 clean:

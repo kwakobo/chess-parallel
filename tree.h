@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#define BRANCH_FACTOR 16
-#define DEPTH 6
+#define BRANCH_FACTOR 32
+#define DEPTH 5
 
 struct tree {
 	struct tree_node *root;
