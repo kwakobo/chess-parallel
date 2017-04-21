@@ -8,8 +8,6 @@
 #include <math.h>
 #include <pthread.h>
 
-#define DEBUG false
-
 #define NINF -147483648
 #define INF 147483648
 
@@ -108,7 +106,7 @@ void * minimax_parallel_helper(void *threadargs)
 }
 
 
-/* serial algorithm */
+/* serial minimax algorithm */
 int minimax(struct tree_node *curr_node, int depth, bool max_player)
 {
 	if (node_is_leaf(curr_node)) 
@@ -136,6 +134,101 @@ int minimax(struct tree_node *curr_node, int depth, bool max_player)
 	}
 }
 
+
+/* serial alphabeta algorithm */
+int alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, int max_player)
+{
+	if (node_is_leaf(curr_node))
+		return curr_node->weight;
+		
+	int val, i;
+	if (max_player)
+	{
+		val = NINF;
+		for (i=0; i<BRANCH_FACTOR; i++) 
+		{
+			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player);
+			if (result > val) val = result;
+			if (alpha < val) alpha = val;
+			if (beta <= alpha) break;
+		}
+		return val;
+	}
+	else 
+	{
+		val = INF;
+		for (i=0; i<BRANCH_FACTOR; i++)
+		{
+			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player);
+			if (result < val) val = result;
+			if (beta > val) beta = val;
+			if (beta <= alpha) break;
+		}
+		return val;
+	}
+
+}
+
+void * alphabeta_parallel_helper(void *threadargs)
+{
+	struct thread_data *args = (struct thread_data *) threadargs;
+	//printf("thread id: %d\n", args->thread_id);
+	args->result = -1;
+	int i, sub_result;
+	for(i = 0; i < BRANCHES_PER_THREAD; i++)
+	{
+		sub_result = alphabeta(args->nodes[i], 0, NINF, INF, false);
+		if(sub_result > args->result)
+			args->result = sub_result;
+		//printf("%d ", sub_result);
+	}
+	//printf("\n");
+
+	pthread_exit(NULL);
+}
+
+int alphabeta_parallel(struct tree_node *root)
+{
+	pthread_t *threads = (pthread_t *) malloc(THREADS * sizeof(pthread_t));
+	struct thread_data *thread_data_array = (struct thread_data *) malloc(THREADS * sizeof(struct thread_data));
+
+
+	int i, j = 0, rc;
+	for(i = 0; i < THREADS; i++)
+	{
+		thread_data_array[i].thread_id = i;
+		for(j = 0; j < BRANCHES_PER_THREAD; j++)
+		{
+			thread_data_array[i].nodes[j] = root->children[i*BRANCHES_PER_THREAD+j];
+		}
+		rc = pthread_create(&threads[i], NULL, alphabeta_parallel_helper, (void *) &thread_data_array[i]);
+		if(rc) {
+			printf("ERROR; Return code from pthread_create() is %d\n", rc);
+			exit(-1);
+		}
+	}
+
+	int final_result = -1;
+
+	for(i = 0; i < THREADS; i++)
+	{
+		rc = pthread_join(threads[i], NULL);
+		if(rc)
+		{
+			printf("ERROR; return code from pthreads_join() is %d\n", rc);
+			exit(-1);
+		}
+		if(thread_data_array[i].result > final_result)
+			final_result = thread_data_array[i].result;
+	}
+
+	free(thread_data_array);
+	free(threads);
+
+	return final_result;
+}
+
+
 int main(int argc, char **argv)
 {
 	int *data = rand_gen(NODES, RANGE);
@@ -148,6 +241,7 @@ int main(int argc, char **argv)
 	struct timespec start, stop; 
 	double time;
 	
+	/* minimax parallel */
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 	
 	printf("Minimax: %d\n", minimax_parallel(minimax_tree.root));
@@ -156,7 +250,7 @@ int main(int argc, char **argv)
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 	printf("Execution time = %f sec\n", time);
 
-
+	/* minimax serial */
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
 	printf("Minimax: %d\n", minimax(minimax_tree.root, 0, true));
@@ -164,6 +258,27 @@ int main(int argc, char **argv)
 	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 	printf("Execution time = %f sec\n", time);
+	
+	
+	/* alphabeta parallel */
+	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+	
+	printf("Alpha-Beta: %d\n", alphabeta_parallel(minimax_tree.root));
+	
+	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
+	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
+	printf("Execution time = %f sec\n", time);
+
+	/* alphabeta serial */
+	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+
+	printf("Alpha-Beta: %d\n", alphabeta(minimax_tree.root, 0, NINF, INF, true));
+
+	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
+	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
+	printf("Execution time = %f sec\n", time);
+	
+	
 	
 	free(data);
 
