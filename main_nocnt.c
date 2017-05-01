@@ -14,34 +14,33 @@
 #define NODES pow(BRANCH_FACTOR, DEPTH)
 #define RANGE 10000
 
-#define THREADS 8
+#define THREADS 4
 #define BRANCHES_PER_THREAD BRANCH_FACTOR / THREADS
 
-int parallel_alpha = NINF;
-int parallel_beta = INF;
+int parallel_alpha;
+int parallel_beta;
 pthread_mutex_t lock_alpha;
 pthread_mutex_t lock_beta;
-
-int node_cnt[THREADS];
 
 struct thread_data {
 	int thread_id;
 	struct tree_node *nodes[BRANCHES_PER_THREAD];
 	int result;
-	int node_cnt;
+	bool max_player;
+	int depth;
 };
 
 int *rand_gen(int nodes, int range);
 void * minimax_parallel_helper(void *threadargs);
 int minimax_parallel(struct tree_node *root);
-int minimax(struct tree_node *curr_node, int depth, bool max_player, int *count);
+int minimax(struct tree_node *curr_node, int depth, bool max_player);
 
-int alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count);
+int alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player);
 void * alphabeta_parallel_helper(void *threadargs);
 int alphabeta_parallel(struct tree_node *root);
 void *pvsplit_parallel_helper(void *threadargs);
-int pvsplit_parallel(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count);
-int pvsplit(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count);
+int pvsplit_parallel(struct tree_node *curr_node, int depth, bool max_player);
+int pvsplit(struct tree_node *curr_node, int depth, bool max_player);
 void alpha_set(int new_alpha);
 void beta_set(int new_beta);
 int alpha_get();
@@ -72,7 +71,6 @@ minimax_parallel(struct tree_node *root)
 	for(i = 0; i < THREADS; i++)
 	{
 		thread_data_array[i].thread_id = i;
-		node_cnt[i] = 0;
 		//if (DEBUG) printf("thread id: %d  ", i);
 		for(j = 0; j < BRANCHES_PER_THREAD; j++)
 		{
@@ -115,7 +113,7 @@ void * minimax_parallel_helper(void *threadargs)
 	int i, sub_result;
 	for(i = 0; i < BRANCHES_PER_THREAD; i++)
 	{
-		sub_result = minimax(args->nodes[i], 0, false, &node_cnt[i]);
+		sub_result = minimax(args->nodes[i], 0, false);
 		if(sub_result > args->result)
 			args->result = sub_result;
 		//printf("%d ", sub_result);
@@ -127,10 +125,8 @@ void * minimax_parallel_helper(void *threadargs)
 
 /* serial minimax algorithm */
 int
-minimax(struct tree_node *curr_node, int depth, bool max_player, int *count)
+minimax(struct tree_node *curr_node, int depth, bool max_player)
 {
-	(*count)++;
-
 	if (node_is_leaf(curr_node)) 
 		return curr_node->weight;
 	
@@ -139,7 +135,7 @@ minimax(struct tree_node *curr_node, int depth, bool max_player, int *count)
 		best_val = NINF;
 		for (i=0; i<BRANCH_FACTOR; i++)
 		{
-			int value = minimax(curr_node->children[i], depth + 1, !max_player, count);
+			int value = minimax(curr_node->children[i], depth + 1, !max_player);
 			if (best_val < value) best_val = value;
 		}
 		return best_val;
@@ -149,7 +145,7 @@ minimax(struct tree_node *curr_node, int depth, bool max_player, int *count)
 		best_val = INF;
 		for(i=0; i<BRANCH_FACTOR; i++)
 		{
-			int value = minimax(curr_node->children[i], depth + 1, !max_player, count);
+			int value = minimax(curr_node->children[i], depth + 1, !max_player);
 			if (value < best_val) best_val = value;
 		}
 		return best_val;
@@ -158,10 +154,8 @@ minimax(struct tree_node *curr_node, int depth, bool max_player, int *count)
 
 /* serial alphabeta algorithm */
 int
-alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count)
+alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player)
 {
-	(*count)++;
-
 	if (node_is_leaf(curr_node))
 		return curr_node->weight;
 		
@@ -171,7 +165,7 @@ alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_
 		val = NINF;
 		for (i=0; i<BRANCH_FACTOR; i++) 
 		{
-			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player, count);
+			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player);
 			if (result > val) val = result;
 			if (alpha < val) alpha = val;
 			if (beta <= alpha) break;
@@ -183,7 +177,7 @@ alphabeta(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_
 		val = INF;
 		for (i=0; i<BRANCH_FACTOR; i++)
 		{
-			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player, count);
+			int result = alphabeta(curr_node->children[i], depth+1, alpha, beta, !max_player);
 			if (result < val) val = result;
 			if (beta > val) beta = val;
 			if (beta <= alpha) break;
@@ -201,7 +195,7 @@ alphabeta_parallel_helper(void *threadargs)
 	int i, sub_result;
 	for(i = 0; i < BRANCHES_PER_THREAD; i++)
 	{
-		sub_result = alphabeta(args->nodes[i], 0, NINF, INF, false, &node_cnt[i]);
+		sub_result = alphabeta(args->nodes[i], 0, NINF, INF, false);
 		if(sub_result > args->result)
 			args->result = sub_result;
 		//printf("%d ", sub_result);
@@ -220,7 +214,6 @@ int alphabeta_parallel(struct tree_node *root)
 	for(i = 0; i < THREADS; i++)
 	{
 		thread_data_array[i].thread_id = i;
-		node_cnt[i] = 0;
 		for(j = 0; j < BRANCHES_PER_THREAD; j++)
 		{
 			thread_data_array[i].nodes[j] = root->children[i*BRANCHES_PER_THREAD+j];
@@ -253,10 +246,8 @@ int alphabeta_parallel(struct tree_node *root)
 }
 
 int
-alphabeta_lock(struct tree_node *curr_node, int depth, bool max_player, int *count)
+alphabeta_lock(struct tree_node *curr_node, int depth, bool max_player)
 {
-	(*count)++;
-
 	if (node_is_leaf(curr_node))
 		return curr_node->weight;
 		
@@ -266,7 +257,7 @@ alphabeta_lock(struct tree_node *curr_node, int depth, bool max_player, int *cou
 		val = NINF;
 		for (i=0; i<BRANCH_FACTOR; i++) 
 		{
-			int result = alphabeta_lock(curr_node->children[i], depth+1, !max_player, count);
+			int result = alphabeta_lock(curr_node->children[i], depth+1, !max_player);
 			if (result > val) val = result;
 			if (alpha_get() < val) alpha_set(val);
 			if (beta_get() <= alpha_get()) break;
@@ -278,7 +269,7 @@ alphabeta_lock(struct tree_node *curr_node, int depth, bool max_player, int *cou
 		val = INF;
 		for (i=0; i<BRANCH_FACTOR; i++)
 		{
-			int result = alphabeta_lock(curr_node->children[i], depth+1, !max_player, count);
+			int result = alphabeta_lock(curr_node->children[i], depth+1, !max_player);
 			if (result < val) val = result;
 			if (beta_get() > val) beta_set(val);
 			if (beta_get() <= alpha_get()) break;
@@ -296,7 +287,7 @@ alphabeta_parallel_helper_lock(void *threadargs)
 	int i, sub_result;
 	for(i = 0; i < BRANCHES_PER_THREAD; i++)
 	{
-		sub_result = alphabeta_lock(args->nodes[i], 0, false, &node_cnt[i]);
+		sub_result = alphabeta_lock(args->nodes[i], 0, false);
 		if(sub_result > args->result)
 			args->result = sub_result;
 		//printf("%d ", sub_result);
@@ -316,7 +307,6 @@ int alphabeta_parallel_lock(struct tree_node *root)
 	for(i = 0; i < THREADS; i++)
 	{
 		thread_data_array[i].thread_id = i;
-		node_cnt[i] = 0;
 		for(j = 0; j < BRANCHES_PER_THREAD; j++)
 		{
 			thread_data_array[i].nodes[j] = root->children[i*BRANCHES_PER_THREAD+j];
@@ -353,25 +343,29 @@ pvsplit_parallel_helper(void *threadargs)
 {
 	struct thread_data *args = (struct thread_data *) threadargs;
 
-	args->result = alphabeta(args->nodes[0], 0, NINF, INF, false, &args->node_cnt);
+	args->result = alphabeta_lock(args->nodes[0], 0, args->max_player);
 
 	pthread_exit(NULL);
 }
 
 int
-pvsplit_parallel(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count)
+pvsplit_parallel(struct tree_node *curr_node, int depth, bool max_player)
 {
 	pthread_t *threads = (pthread_t *) malloc((BRANCH_FACTOR - 1) * sizeof(pthread_t));
 	struct thread_data *thread_data_array = (struct thread_data *) malloc((BRANCH_FACTOR - 1) * sizeof(struct thread_data));
 
-	int i, rc;
-	int final_result = -1;
+	int i, rc, result;
+	int final_result;
+	if(max_player)
+		final_result = NINF;
+	else
+		final_result = INF;
 
 	for(i = 1; i < BRANCH_FACTOR; i++)
 	{
 		thread_data_array[i - 1].thread_id = i;
-		thread_data_array[i - 1].node_cnt = 0;
 		thread_data_array[i - 1].nodes[0] = curr_node->children[i];
+		thread_data_array[i - 1].max_player = !max_player;
 
 		rc = pthread_create(&threads[i - 1], NULL, pvsplit_parallel_helper, (void *) &thread_data_array[i - 1]);
 	}
@@ -384,37 +378,85 @@ pvsplit_parallel(struct tree_node *curr_node, int depth, int alpha, int beta, bo
 			printf("ERROR; return code from pthreads_join() is %d\n", rc);
 			exit(-1);
 		}
-		if(thread_data_array[i - 1].result > final_result)
-			final_result = thread_data_array[i - 1].result;
-		(*count ) += thread_data_array[i - 1].node_cnt;
+		result = thread_data_array[i - 1].result;
+		if(max_player)
+		{
+			if(result >= beta_get()) {
+				final_result = beta_get();
+				break;
+			}
+			if(result > final_result)
+				final_result = result;
+		}
+		else
+		{
+			if(result <= alpha_get())
+			{
+				final_result = alpha_get();
+				break;
+			}
+			if(result < final_result)
+				final_result = result;
+		}
 	}
 
-	return final_result;
+	free(threads);
+	free(thread_data_array);
+
+	if(max_player)
+	{
+		if(final_result >= beta_get())
+			return beta_get();
+		if(final_result > alpha_get())
+			alpha_set(final_result);
+		return alpha_get();
+	}
+	else
+	{
+		if(final_result <= alpha_get())
+			return alpha_get();
+		if(final_result < beta_get())
+			beta_set(final_result);
+		return beta_get();
+	}
 }
 
 int
-pvsplit(struct tree_node *curr_node, int depth, int alpha, int beta, bool max_player, int *count)
+pvsplit(struct tree_node *curr_node, int depth, bool max_player)
 {
-	(*count)++;
-
 	if (node_is_leaf(curr_node))
 		return curr_node->weight;
 
 	int result;
 
-	result = pvsplit(curr_node->children[0], depth + 1, alpha, beta, !max_player, count);
+	result = pvsplit(curr_node->children[0], depth + 1, !max_player);
+	//printf("result %d-%d-%d\n", result, alpha_get(), beta_get());
 	if(max_player)
 	{
-		if (result >= beta) return beta;
-		if (result > alpha) alpha = result;
+		if (result >= beta_get()) return beta_get();
+		if (result > alpha_get()) alpha_set(result);
 	}
 	else
 	{
-		if (result <= alpha) return alpha;
-		if (result < beta) beta = result;
+		if (result <= alpha_get()) return alpha_get();
+		if (result < beta_get()) beta_set(result);
 	}
 
-	return pvsplit_parallel(curr_node, depth + 1, alpha, beta, !max_player, count);
+	result = pvsplit_parallel(curr_node, depth + 1, max_player);
+	//printf("*result %d-%d-%d\n", result, alpha_get(), beta_get());
+	if(max_player)
+	{
+		if (result >= beta_get()) return beta_get();
+		if (result > alpha_get()) alpha_set(result);
+		return alpha_get();
+	}
+	else
+	{
+		if (result <= alpha_get()) return alpha_get();
+		if (result < beta_get()) beta_set(result);
+		return beta_get();
+	}
+	return result;
 }
 
 int
@@ -443,7 +485,8 @@ void
 alpha_set(int new_alpha)
 {
 	pthread_mutex_lock(&lock_alpha);
-	parallel_alpha = new_alpha;
+	if(new_alpha > parallel_alpha)
+		parallel_alpha = new_alpha;
 	pthread_mutex_unlock(&lock_alpha);
 }
 
@@ -451,7 +494,8 @@ void
 beta_set(int new_beta)
 {
 	pthread_mutex_lock(&lock_beta);
-	parallel_beta = new_beta;
+	if(new_beta < parallel_beta)
+		parallel_beta = new_beta;
 	pthread_mutex_unlock(&lock_beta);
 }
 
@@ -468,76 +512,33 @@ int main(int argc, char **argv)
 	struct timespec start, stop; 
 	double time;
 
-	int i, total, result;
-	float avg;
-
-	/* minimax serial */
-	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
-
-	node_cnt[0] = 0;
-	result = minimax(minimax_tree.root, 0, true, &node_cnt[0]);
-
-	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
-	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
-
-	printf("[S]Minimax: %d\n", result);
-	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\n", node_cnt[0]);
-
-	/* minimax parallel */
-	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
-
-	result = minimax_parallel(minimax_tree.root);
-
-	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
-	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
-
-	total = 0;
-	avg = 0.0;
-	for(i = 0; i < THREADS; i++)
-	{
-		total += node_cnt[i];
-		avg += node_cnt[i];
-	}
-	avg /= THREADS;
-	printf("[P]Minimax: %d\n", result);
-	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\tAVG: %f\n", total, avg);
+	int result;
 
 	/* alphabeta serial */
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
-	node_cnt[0] = 0;
-	result = alphabeta(minimax_tree.root, 0, NINF, INF, true, &node_cnt[0]);
+	result = alphabeta(minimax_tree.root, 0, NINF, INF, true);
 
 	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 
 	printf("[S]Alpha-Beta: %d\n", result);
 	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\n", node_cnt[0]);
 
 	/* alphabeta parallel */
-	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
+/*	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
 	result = alphabeta_parallel(minimax_tree.root);
 
 	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 
-	total = 0;
-	avg = 0.0;
-	for(i = 0; i < THREADS; i++)
-	{
-		total += node_cnt[i];
-		avg += node_cnt[i];
-	}
-	avg /= THREADS;
 	printf("[P]Alpha-Beta: %d\n", result);
 	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\tAVG: %f\n", total, avg);
-
+*/
 	/* alphabeta parallel with lock */
+	parallel_alpha = NINF;
+	parallel_beta = INF;
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
 	result = alphabeta_parallel_lock(minimax_tree.root);
@@ -545,28 +546,20 @@ int main(int argc, char **argv)
 	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 
-	total = 0;
-	avg = 0.0;
-	for(i = 0; i < THREADS; i++)
-	{
-		total += node_cnt[i];
-		avg += node_cnt[i];
-	}
-	avg /= THREADS;
 	printf("[PL]Alpha-Beta: %d\n", result);
 	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\tAVG: %f\n", total, avg);
 
 	/* pvsplit */
+	parallel_alpha = NINF;
+	parallel_beta = INF;
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
-	result = pvsplit(minimax_tree.root, 0, NINF, INF, true, &node_cnt[0]);
+	result = pvsplit(minimax_tree.root, 0, true);
 
-	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}		
+	if( clock_gettime( CLOCK_REALTIME, &stop) == -1 ) { perror("clock gettime");}
 	time = (stop.tv_sec - start.tv_sec)+ (double)(stop.tv_nsec - start.tv_nsec)/1e9;
 	printf("[PV]Alpha-Beta: %d\n", result);
 	printf("Execution time = %f sec\n", time);
-	printf("Nodes: %d\n", node_cnt[0]);
 
 	free(data);
 
